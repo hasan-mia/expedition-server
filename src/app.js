@@ -22,6 +22,10 @@ app.use(fileUpload())
 app.use(express.urlencoded({ extended: false }))
 app.use(morgan('dev'))
 
+app.get('/', async (_, res) => {
+    res.send(`<p style='text-align:center; color: green; font-weight:800; font-size: 32px;'>Server is running</p>`)
+})
+
 
 // All Route
 app.use(`${API_PREFIX}/`, user)
