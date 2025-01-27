@@ -70,14 +70,7 @@ exports.getExpeditions = catchAsyncError(async (req, res, next) => {
     const { keyword, date } = req.query;
 
     try {
-        let perPage;
-
-        // Parse the perPage limit
-        if (req.query && typeof req.query.limit === "string") {
-            perPage = parseInt(req.query.limit, 10);
-            console.log(`Parsed perPage: ${perPage}`);
-        }
-
+        const perPage = req.query.limit ? parseInt(req.query.limit, 10) : 10;
         const searchCriteria = {};
 
         if (keyword) {

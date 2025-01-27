@@ -12,6 +12,7 @@ const { API_PREFIX } = require('./config/constant.js')
 // All route
 const user = require('./routes/userRoutes')
 const expedition = require('./routes/expeditionRoutes')
+const booking = require('./routes/bookingRoutes')
 
 app.use(cors());
 app.use(express.json({ limit: '1mb' }))
@@ -25,6 +26,7 @@ app.use(morgan('dev'))
 // All Route
 app.use(`${API_PREFIX}/`, user)
 app.use(`${API_PREFIX}/expedition`, expedition)
+app.use(`${API_PREFIX}/booking`, booking)
 
 
 // error middleware

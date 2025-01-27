@@ -52,40 +52,30 @@ exports.registerUser = catchAsyncError(async (req, res, next) => {
 //Login User
 exports.loginUser = catchAsyncError(async (req, res, next) => {
   const { email, password } = req.body
-
-  if (!email || !password) {
-    return next(new ErrorHandler('Please Enter Email & Password', 400))
-  }
-
-  const user = await User.findOne({ email }).select('+password')
-
-  if (!user) {
-    return next(new ErrorHandler('Invalid Email & Password', 401))
-  }
-
   try {
+    if (!email || !password) {
+      return next(new ErrorHandler('Please Enter Email & Password', 400))
+    }
+
+    const user = await User.findOne({ email }).select('+password')
+
+    if (!user) {
+      return next(new ErrorHandler('Invalid Email & Password', 401))
+    }
+
     const isPasswordMatched = await user.comparePassword(password);
 
     if (!isPasswordMatched) {
       return next(new ErrorHandler('Invalid Email & Password !', 401))
     }
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '15m' });
-    const magicLink = `${FRONTEND_URL}/auth/verify?token=${token}`;
+    const responsePayload = {
+      id: user._id,
+      role: user.role,
+    };
 
-    const options = {
-      from: `Verify Email <${SMPT_MAIL}>`,
-      email,
-      subject: 'Please verify email',
-      message: magicLink,
-    }
+    sendToken(responsePayload, 200, res);
 
-    await sendEmail(options)
-
-    res.status(200).json({
-      success: true,
-      message: 'Verify link sent to email successfully.'
-    })
   } catch (error) {
     return next(new ErrorHandler(error.message, 500));
   }
