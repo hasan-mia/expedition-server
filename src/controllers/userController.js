@@ -101,3 +101,21 @@ exports.verifyToken = catchAsyncError(async (req, res) => {
     res.status(401).json({ message: 'Invalid or expired token' });
   }
 })
+
+exports.userInfo = catchAsyncError(async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const user = await User.findOne({ _id: userId })
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: user,
+    })
+  } catch (error) {
+    res.status(401).json({ message: 'User not found' });
+  }
+})
