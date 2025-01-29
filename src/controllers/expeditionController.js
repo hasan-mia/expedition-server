@@ -67,45 +67,65 @@ exports.deleteExpedition = catchAsyncError(async (req, res, next) => {
 })
 
 exports.getExpeditions = catchAsyncError(async (req, res, next) => {
-    const { keyword, date } = req.query;
+    const { keyword, date, minPrice, maxPrice } = req.query;
 
     try {
-        const perPage = req.query.limit ? parseInt(req.query.limit, 10) : 10;
+        const perPage = Math.max(1, parseInt(req.query.limit, 10) || 10);
+        const currentPage = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const skip = (currentPage - 1) * perPage;
+
         const searchCriteria = {};
 
         if (keyword) {
-            searchCriteria.$or = [
-                { name: { $regex: keyword, $options: 'i' } },
-                { price: { $regex: keyword, $options: 'i' } },
-            ];
+            const sanitizedKeyword = keyword.toString().trim();
+            if (sanitizedKeyword) {
+                searchCriteria.$or = [
+                    { name: { $regex: sanitizedKeyword, $options: 'i' } },
+                    { destination: { $regex: sanitizedKeyword, $options: 'i' } },
+                    { description: { $regex: sanitizedKeyword, $options: 'i' } }
+                ];
+            }
         }
 
         if (date) {
-            let startOfDay = new Date(date);
-            startOfDay.setUTCHours(0, 0, 0, 0);
-            let endOfDay = new Date(date);
-            endOfDay.setUTCHours(23, 59, 59, 999);
-            searchCriteria.createdAt = { $gte: startOfDay, $lte: endOfDay };
+            const parsedDate = new Date(date);
+            if (!isNaN(parsedDate.getTime())) {
+                const startOfDay = new Date(parsedDate);
+                startOfDay.setUTCHours(0, 0, 0, 0);
+                const endOfDay = new Date(parsedDate);
+                endOfDay.setUTCHours(23, 59, 59, 999);
+                searchCriteria.createdAt = {
+                    $gte: startOfDay,
+                    $lte: endOfDay
+                };
+            }
         }
 
-        const currentPage = req.query.page ? parseInt(req.query.page, 10) : 1;
-        const skip = (currentPage - 1) * (perPage || 10);
+        if (minPrice !== undefined || maxPrice !== undefined) {
+            searchCriteria.price = {};
 
-        // Aggregation
+            if (minPrice !== undefined) {
+                const parsedMinPrice = parseFloat(minPrice);
+                if (!isNaN(parsedMinPrice)) {
+                    searchCriteria.price.$gte = parsedMinPrice;
+                }
+            }
+
+            if (maxPrice !== undefined) {
+                const parsedMaxPrice = parseFloat(maxPrice);
+                if (!isNaN(parsedMaxPrice)) {
+                    searchCriteria.price.$lte = parsedMaxPrice;
+                }
+            }
+
+            if (Object.keys(searchCriteria.price).length === 0) {
+                delete searchCriteria.price;
+            }
+        }
+
         const aggregationPipeline = [
             {
                 $match: searchCriteria,
-            },
-            {
-                $project: {
-                    name: 1,
-                    destination: 1,
-                    startDate: 1,
-                    endDate: 1,
-                    price: 1,
-                    availableSeats: 1,
-                    totalSeats: 1,
-                },
             },
             {
                 $sort: { createdAt: -1 },
@@ -116,44 +136,72 @@ exports.getExpeditions = catchAsyncError(async (req, res, next) => {
             {
                 $limit: perPage,
             },
+            {
+                $project: {
+                    name: 1,
+                    destination: 1,
+                    startDate: 1,
+                    endDate: 1,
+                    price: 1,
+                    availableSeats: 1,
+                    totalSeats: 1,
+                    createdAt: 1,
+                    _id: 1
+                },
+            },
         ];
 
-        // Get total count for pagination
-        const totalDocuments = await expeditionModel.countDocuments(searchCriteria);
-        const totalPages = Math.ceil(totalDocuments / (perPage || 10));
+        const [totalDocuments, result] = await Promise.all([
+            expeditionModel.countDocuments(searchCriteria),
+            expeditionModel.aggregate(aggregationPipeline)
+        ]);
 
-        // Execute the aggregation
-        const result = await expeditionModel.aggregate(aggregationPipeline);
-
+        const totalPages = Math.ceil(totalDocuments / perPage);
         const nextPage = currentPage < totalPages ? currentPage + 1 : null;
-        let nextUrl;
 
+        let nextUrl = null;
         if (nextPage) {
-            nextUrl = `${req.originalUrl.split("?")[0]}?limit=${perPage || 10
-                }&page=${nextPage}`;
-            if (keyword) {
-                nextUrl += `&keyword=${keyword}`;
-            }
-            if (date) {
-                nextUrl += `&date=${date}`;
-            }
+            const baseUrl = req.originalUrl.split("?")[0];
+            const queryParams = new URLSearchParams({
+                limit: perPage.toString(),
+                page: nextPage.toString()
+            });
+
+            if (keyword) queryParams.append('keyword', keyword.toString());
+            if (date) queryParams.append('date', date.toString());
+            if (minPrice !== undefined) queryParams.append('minPrice', minPrice.toString());
+            if (maxPrice !== undefined) queryParams.append('maxPrice', maxPrice.toString());
+
+            nextUrl = `${baseUrl}?${queryParams.toString()}`;
         }
 
         res.status(200).json({
             success: true,
             data: result,
-            total: totalDocuments,
-            perPage: perPage || 10,
-            limit: result.length,
-            currentPage,
-            totalPages,
-            nextPage,
-            nextUrl,
+            pagination: {
+                total: totalDocuments,
+                perPage,
+                currentPage,
+                totalPages,
+                nextPage,
+                nextUrl,
+            },
+            filters: {
+                keyword: keyword || null,
+                date: date || null,
+                priceRange: {
+                    min: minPrice ? parseFloat(minPrice) : null,
+                    max: maxPrice ? parseFloat(maxPrice) : null
+                }
+            }
         });
-    } catch (error) {
-        return next(new ErrorHandler(error.message, 500));
-    }
 
+    } catch (error) {
+        return next(new ErrorHandler(
+            error.message || 'Error fetching expeditions',
+            error.status || 500
+        ));
+    }
 });
 
 exports.getPopularDestinations = catchAsyncError(async (_, res, next) => {
