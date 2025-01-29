@@ -64,8 +64,12 @@ FRONTEND_URL=https://localhost:3333
  npm run dev
 ```
 
-## API Documantation
+[Live Frontend](https://expedition-frontend.vercel.app/)
 
-```bash
-https://documenter.getpostman.com/view/25680118/2sAYQgi9Gs
-```
+[Live Backend](https://expedition-backend.vercel.app/)
+
+[API Documentation](https://documenter.getpostman.com/view/25680118/2sAYQgi9Gs)
+
+[Frontend Code](https://github.com/hasan-mia/expedition-client)
+
+[Backend Code](https://github.com/hasan-mia/expedition-server)

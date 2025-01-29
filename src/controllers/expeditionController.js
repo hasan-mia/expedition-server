@@ -67,7 +67,7 @@ exports.deleteExpedition = catchAsyncError(async (req, res, next) => {
 })
 
 exports.getExpeditions = catchAsyncError(async (req, res, next) => {
-    const { keyword, date, minPrice, maxPrice } = req.query;
+    const { keyword, date, minPrice, maxPrice, popular } = req.query;
 
     try {
         const perPage = Math.max(1, parseInt(req.query.limit, 10) || 10);
@@ -128,8 +128,19 @@ exports.getExpeditions = catchAsyncError(async (req, res, next) => {
                 $match: searchCriteria,
             },
             {
-                $sort: { createdAt: -1 },
+                $addFields: {
+                    bookedSeats: { $subtract: ['$totalSeats', '$availableSeats'] }
+                }
             },
+            ...(popular ? [
+                {
+                    $sort: { bookedSeats: -1 }
+                }
+            ] : [
+                {
+                    $sort: { createdAt: -1 }
+                }
+            ]),
             {
                 $skip: skip,
             },
@@ -146,6 +157,7 @@ exports.getExpeditions = catchAsyncError(async (req, res, next) => {
                     availableSeats: 1,
                     totalSeats: 1,
                     createdAt: 1,
+                    bookedSeats: 1,
                     _id: 1
                 },
             },
@@ -171,6 +183,7 @@ exports.getExpeditions = catchAsyncError(async (req, res, next) => {
             if (date) queryParams.append('date', date.toString());
             if (minPrice !== undefined) queryParams.append('minPrice', minPrice.toString());
             if (maxPrice !== undefined) queryParams.append('maxPrice', maxPrice.toString());
+            if (popular) queryParams.append('popular', 'true');
 
             nextUrl = `${baseUrl}?${queryParams.toString()}`;
         }
@@ -192,7 +205,8 @@ exports.getExpeditions = catchAsyncError(async (req, res, next) => {
                 priceRange: {
                     min: minPrice ? parseFloat(minPrice) : null,
                     max: maxPrice ? parseFloat(maxPrice) : null
-                }
+                },
+                popular: popular || null,
             }
         });
 
@@ -207,31 +221,91 @@ exports.getExpeditions = catchAsyncError(async (req, res, next) => {
 exports.getPopularDestinations = catchAsyncError(async (_, res, next) => {
     try {
         const result = await expeditionModel.aggregate([
-            { $group: { _id: '$destination', count: { $sum: 1 } } },
-            { $sort: { count: -1 } },
-            { $limit: 5 }
+            {
+                $group: {
+                    _id: '$destination',
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { count: -1 }
+            },
+            {
+                $limit: 5
+            },
+            {
+                $lookup: {
+                    from: 'expeditions',
+                    localField: '_id',
+                    foreignField: 'destination',
+                    as: 'expeditionDetails'
+                }
+            },
+            {
+                $unwind: {
+                    path: '$expeditionDetails',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    count: 1,
+                    expeditionDetails: 1
+                }
+            }
         ]);
+
+        if (!result || result.length === 0) {
+            return next(new ErrorHandler("No popular destinations found", 404));
+        }
+
         res.status(200).json({
             success: true,
             data: result,
         });
     } catch (error) {
-        return next(new ErrorHandler(error.message, 400))
+        return next(new ErrorHandler(error.message, 400));
     }
-})
+});
+
 
 exports.getMonthlyBookings = catchAsyncError(async (_, res, next) => {
     try {
-
         const result = await expeditionModel.aggregate([
             {
                 $group: {
                     _id: { $dateToString: { format: '%Y-%m', date: '$startDate' } },
-                    count: { $sum: 1 }
+                    count: { $sum: 1 },
                 }
             },
-            { $sort: { '_id': 1 } }
+            { $sort: { '_id': 1 } },
+            {
+                $lookup: {
+                    from: 'expeditions',
+                    localField: '_id',
+                    foreignField: 'startDate',
+                    as: 'expeditionDetails'
+                }
+            },
+            {
+                $unwind: {
+                    path: '$expeditionDetails',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    count: 1,
+                    expeditionDetails: 1
+                }
+            }
         ]);
+
+        if (!result || result.length === 0) {
+            return next(new ErrorHandler("No bookings found for the selected months", 404));
+        }
 
         res.status(200).json({
             success: true,
@@ -239,9 +313,10 @@ exports.getMonthlyBookings = catchAsyncError(async (_, res, next) => {
         });
 
     } catch (error) {
-        return next(new ErrorHandler(error.message, 400))
+        return next(new ErrorHandler(error.message, 400));
     }
-})
+});
+
 
 exports.getExpedition = catchAsyncError(async (req, res, next) => {
     const { id } = req.params;

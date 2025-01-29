@@ -9,7 +9,7 @@ router.route('/update/:id').put(isAuthenticated, isAuthorizeRoles('admin'), upda
 router.route('/delete/:id').delete(isAuthenticated, isAuthorizeRoles('admin'), deleteExpedition)
 router.route('/all').get(getExpeditions)
 router.route('/:id').get(getExpedition)
-router.route('/popular').get(getPopularDestinations)
-router.route('/monthly').get(getMonthlyBookings)
+router.route('/popular/all').get(getPopularDestinations)
+router.route('/monthly/all').get(getMonthlyBookings)
 
 module.exports = router
