@@ -242,3 +242,22 @@ exports.getMonthlyBookings = catchAsyncError(async (_, res, next) => {
         return next(new ErrorHandler(error.message, 400))
     }
 })
+
+exports.getExpedition = catchAsyncError(async (req, res, next) => {
+    const { id } = req.params;
+    try {
+
+        const expedition = await expeditionModel.findOne({ _id: id });
+
+        if (!expedition) {
+            return res.status(404).json({ message: 'Expedition not found' });
+        }
+
+        sendLiveMessage('getExpedition', 'Expedition deleted successfully')
+
+        res.status(200).json({ message: 'Expedition found successfully', data: expedition });
+
+    } catch (error) {
+        return next(new ErrorHandler(error.message, 500));
+    }
+})
