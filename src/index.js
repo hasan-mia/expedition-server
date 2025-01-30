@@ -1,36 +1,55 @@
-const dotenv = require('dotenv')
-dotenv.config({ path: './.env' })
+const http = require("http");
+const dotenv = require("dotenv");
+dotenv.config({ path: "./.env" });
+const app = require("./app");
+const connectDatabase = require("./config/database");
+const { default: mongoose } = require("mongoose");
+const { PORT } = require("./config/constant");
+const { connectSocket } = require("./config/socket");
 
-const app = require('./app')
+const startServer = async () => {
+  try {
+    await connectDatabase();
 
-const connectDatabase = require('./config/database')
-const { PORT } = require('./config/constant')
-const { connectSocket } = require('./config/socket')
+    const server = http.createServer(app);
+    connectSocket(server);
 
-process.on('uncaughtException', (err) => {
-  console.log(`Error: ${err.message}`)
-  console.log(`Shutting down the server due to Uncaught Exception`)
+    server.listen(PORT, () => {
+      console.log(`Server is working on http://localhost:${PORT}`);
+    });
 
-  throw Error('Server Not Running...');
+    process.on("SIGINT", async () => {
+      console.log("Shutting down gracefully...");
+      try {
+        await mongoose.connection.close();
+        server.close(() => {
+          console.log("Server closed. Database connections released.");
+        });
+      } catch (err) {
+        console.error("Error during shutdown:", err);
+        throw err;
+      }
+    });
+
+    process.on("uncaughtException", (err) => {
+      console.error(`Uncaught Exception: ${err.message}`);
+      throw err;
+    });
+
+    process.on("unhandledRejection", (err) => {
+      console.error(`Unhandled Promise Rejection: ${err.message}`);
+      server.close(() => {
+        throw err;
+      });
+    });
+  } catch (error) {
+    console.error("Failed to start the server:", error);
+    throw error;
+  }
+};
+
+startServer().catch((error) => {
+  console.error("Fatal error occurred:", error);
 });
 
-connectDatabase();
-
-let server = connectSocket(app);
-
-server = app.listen(PORT, () => {
-  console.log(`Server is working on http://localhost:${PORT}`)
-});
-
-
-process.on('unhandledRejection', (err) => {
-  console.log(`Error: ${err.message}`)
-  console.log(`Shutting down the server due to Unhandled Promis Rejection`)
-
-  server.close(() => {
-    throw Error('Server Not Running...')
-  })
-});
-
-
-module.exports = app
+module.exports = app;

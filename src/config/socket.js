@@ -1,17 +1,17 @@
-const http = require('http');
-const socketIO = require('socket.io');
+
+const { Server } = require("socket.io");
 
 let io;
 
 const userRooms = {};
 
-const connectSocket = (app) => {
-  const server = http.createServer(app);
-  io = socketIO(server, {
+const connectSocket = (server) => {
+  io = new Server(server, {
     cors: {
       origin: "*",
-      methods: ["GET", "POST"],
-      credentials: true,
+      methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE"],
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
     },
   });
 
