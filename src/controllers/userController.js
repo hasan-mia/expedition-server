@@ -28,7 +28,7 @@ exports.registerUser = catchAsyncError(async (req, res, next) => {
     const createdUser = await User.create({ email, password: hashedPassword, role });
 
     const token = jwt.sign({ id: createdUser._id }, JWT_SECRET, { expiresIn: '15m' });
-    const magicLink = `${FRONTEND_URL}/auth/verify?token=${token}`;
+    const magicLink = `${FRONTEND_URL}/verify?token=${token}`;
 
     const options = {
       from: `Verify Email <${SMPT_MAIL}>`,
